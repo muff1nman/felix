@@ -81,10 +81,10 @@ func newIPIPManagerWithShim(
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
+func (d *ipipManager) KeepIPIPDeviceInSync(interfaceName string, mtu int, address net.IP) {
 	log.Info("IPIP thread started.")
 	for {
-		err := d.configureIPIPDevice(mtu, address)
+		err := d.configureIPIPDevice(interfaceName, mtu, address)
 		if err != nil {
 			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
 			time.Sleep(1 * time.Second)
@@ -95,24 +95,32 @@ func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
+func (d *ipipManager) configureIPIPDevice(linkName string, mtu int, address net.IP) error {
 	logCxt := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
+		"link":       linkName,
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
-	link, err := d.dataplane.LinkByName("tunl0")
+	link, err := d.dataplane.LinkByName(linkName)
 	if err != nil {
 		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
 		// needed.  The tunl0 device is actually created automatically by the kernel
 		// module.
-		err := d.dataplane.RunCmd("ip", "tunnel", "add", "tunl0", "mode", "ipip")
-		if err != nil {
-			log.WithError(err).Warning("Failed to add IPIP tunnel device")
-			return err
+		if linkName == "tunl0" {
+			err := d.dataplane.RunCmd("ip", "tunnel", "add", linkName, "mode", "ipip")
+			if err != nil {
+				log.WithError(err).Warning("Failed to add IPIP tunnel device")
+				return err
+			}
+		} else {
+			if err := d.dataplane.RunCmd("ip", "link", "add", "name", linkName, "type", "ipip", "local", address.String()); err != nil {
+				log.WithError(err).Warning("Failed to add IPIP tunnel device")
+				return err
+			}
 		}
-		link, err = d.dataplane.LinkByName("tunl0")
+		link, err = d.dataplane.LinkByName(linkName)
 		if err != nil {
 			log.WithError(err).Warning("Failed to get tunnel device")
 			return err
@@ -138,7 +146,7 @@ func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 		logCxt.Info("Set tunnel admin up")
 	}
 
-	if err := d.setLinkAddressV4("tunl0", address); err != nil {
+	if err := d.setLinkAddressV4(linkName, address); err != nil {
 		log.WithError(err).Warn("Failed to set tunnel device IP")
 		return err
 	}

@@ -258,6 +258,7 @@ type Config struct {
 	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
 	// by the host when sending traffic to a workload over IPIP.
 	IPIPTunnelAddress net.IP
+	IPIPTunnelInterfaceName string
 	// Same for VXLAN.
 	VXLANTunnelAddress net.IP
 

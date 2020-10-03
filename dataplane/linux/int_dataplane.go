@@ -853,6 +853,7 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	if d.config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		go d.ipipManager.KeepIPIPDeviceInSync(
+			d.config.RulesConfig.IPIPTunnelInterfaceName,
 			d.config.IPIPMTU,
 			d.config.RulesConfig.IPIPTunnelAddress,
 		)
